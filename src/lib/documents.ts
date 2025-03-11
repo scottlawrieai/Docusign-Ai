@@ -30,6 +30,15 @@ export interface SignatureField {
   page: number;
 }
 
+export interface Signature {
+  id: string;
+  signatory_id: string;
+  document_id: string;
+  signature_data: string;
+  signature_type: "draw" | "type";
+  created_at: string;
+}
+
 // Upload document file to storage
 export async function uploadDocumentFile(file: File, userId: string) {
   const fileExt = file.name.split(".").pop();
@@ -94,6 +103,25 @@ export async function getDocument(documentId: string) {
   return data as Document;
 }
 
+// Get document with detailed information
+export async function getDocumentWithDetails(documentId: string) {
+  const { data, error } = await supabase
+    .from("documents")
+    .select(
+      `
+      *,
+      signatories:signatories(*),
+      signature_fields:signature_fields(*),
+      owner:user_id(*)
+    `,
+    )
+    .eq("id", documentId)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
 // Get document file URL
 export function getDocumentFileUrl(filePath: string) {
   const { data } = supabase.storage.from("documents").getPublicUrl(filePath);
@@ -105,7 +133,27 @@ export async function addSignatories(
   documentId: string,
   signatories: { email: string; name?: string }[],
 ) {
-  const signatoriesToInsert = signatories.map((signatory) => ({
+  // First check if any of these emails already exist for this document
+  const { data: existingSignatories } = await supabase
+    .from("signatories")
+    .select("email")
+    .eq("document_id", documentId);
+
+  const existingEmails = new Set(
+    existingSignatories?.map((s) => s.email.toLowerCase()) || [],
+  );
+
+  // Filter out duplicates
+  const newSignatories = signatories.filter(
+    (signatory) => !existingEmails.has(signatory.email.toLowerCase()),
+  );
+
+  if (newSignatories.length === 0) {
+    // No new signatories to add
+    return [];
+  }
+
+  const signatoriesToInsert = newSignatories.map((signatory) => ({
     document_id: documentId,
     email: signatory.email,
     name: signatory.name || null,
@@ -119,10 +167,16 @@ export async function addSignatories(
 
   if (error) throw error;
 
+  // Get total count of signatories for this document
+  const { count } = await supabase
+    .from("signatories")
+    .select("*", { count: "exact", head: true })
+    .eq("document_id", documentId);
+
   // Update document signatories count
   await supabase
     .from("documents")
-    .update({ signatories_count: signatories.length })
+    .update({ signatories_count: count || newSignatories.length })
     .eq("id", documentId);
 
   return data as Signatory[];
@@ -144,12 +198,23 @@ export async function addSignatureFields(
   documentId: string,
   fields: { x: number; y: number; page?: number }[],
 ) {
+  // First delete existing fields
+  await supabase
+    .from("signature_fields")
+    .delete()
+    .eq("document_id", documentId);
+
+  // Then add the new fields
   const fieldsToInsert = fields.map((field) => ({
     document_id: documentId,
     x_position: field.x,
     y_position: field.y,
     page: field.page || 1,
   }));
+
+  if (fieldsToInsert.length === 0) {
+    return [];
+  }
 
   const { data, error } = await supabase
     .from("signature_fields")
@@ -169,6 +234,17 @@ export async function getDocumentSignatureFields(documentId: string) {
 
   if (error) throw error;
   return data as SignatureField[];
+}
+
+// Get signatures for a document
+export async function getDocumentSignatures(documentId: string) {
+  const { data, error } = await supabase
+    .from("signatures")
+    .select("*, signatory:signatory_id(*)")
+    .eq("document_id", documentId);
+
+  if (error) throw error;
+  return data;
 }
 
 // Mark a document as signed by a signatory
@@ -199,4 +275,55 @@ export async function markAsSigned(documentId: string, signatoryId: string) {
     .eq("id", documentId);
 
   return signedCount;
+}
+
+// Check if a document is fully signed
+export async function isDocumentFullySigned(documentId: string) {
+  const { data, error } = await supabase
+    .from("documents")
+    .select("signatories_count, signed_count")
+    .eq("id", documentId)
+    .single();
+
+  if (error) throw error;
+  return (
+    data.signatories_count > 0 && data.signatories_count === data.signed_count
+  );
+}
+
+// Get document audit trail
+export async function getDocumentAuditTrail(documentId: string) {
+  // Get document creation
+  const { data: document } = await supabase
+    .from("documents")
+    .select("created_at, title, user_id")
+    .eq("id", documentId)
+    .single();
+
+  // Get all signature events
+  const { data: signatures } = await supabase
+    .from("signatures")
+    .select("created_at, signatory:signatory_id(email, name)")
+    .eq("document_id", documentId)
+    .order("created_at", { ascending: true });
+
+  // Combine into audit trail
+  const auditTrail = [
+    {
+      event: "Document Created",
+      timestamp: document.created_at,
+      user: "Owner",
+      details: `Document "${document.title}" was created`,
+    },
+    ...signatures.map((sig) => ({
+      event: "Document Signed",
+      timestamp: sig.created_at,
+      user: sig.signatory.name || sig.signatory.email,
+      details: `Signed by ${sig.signatory.name || sig.signatory.email}`,
+    })),
+  ];
+
+  return auditTrail.sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+  );
 }

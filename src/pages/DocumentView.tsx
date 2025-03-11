@@ -9,6 +9,7 @@ import {
   getDocumentFileUrl,
   addSignatureFields,
   addSignatories,
+  getDocumentSignatureFields,
 } from "@/lib/documents";
 
 interface Recipient {
@@ -42,8 +43,21 @@ const DocumentView = () => {
         const url = getDocumentFileUrl(document.file_path);
         setDocumentUrl(url);
 
-        // In a real app, you would also fetch signature fields here
-        // For now, we'll use the local state
+        // Fetch existing signature fields
+        try {
+          const fields = await getDocumentSignatureFields(id);
+          if (fields && fields.length > 0) {
+            setSignatureFields(
+              fields.map((field) => ({
+                id: field.id,
+                x: field.x_position,
+                y: field.y_position,
+              })),
+            );
+          }
+        } catch (fieldError) {
+          console.error("Error fetching signature fields:", fieldError);
+        }
       } catch (error) {
         console.error("Error fetching document:", error);
         navigate("/dashboard");
@@ -95,9 +109,6 @@ const DocumentView = () => {
     try {
       // Add signatories to database
       await addSignatories(id, recipients);
-
-      console.log("Sending document to:", recipients);
-      navigate("/dashboard");
     } catch (error) {
       console.error("Error sending document:", error);
     }
@@ -143,6 +154,7 @@ const DocumentView = () => {
         open={shareDialogOpen}
         onOpenChange={setShareDialogOpen}
         documentName={documentName}
+        documentId={id}
         onSend={handleShareSend}
       />
     </div>
