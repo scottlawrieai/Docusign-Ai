@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Save, Pencil, UserPlus, Send } from "lucide-react";
@@ -24,6 +24,7 @@ const DocumentEditor = ({
   const [signatureFields, setSignatureFields] = useState<
     { id: string; x: number; y: number }[]
   >([]);
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleAddSignatureField = (e: React.MouseEvent<HTMLDivElement>) => {
     if (activeTab === "edit") {
@@ -38,6 +39,40 @@ const DocumentEditor = ({
     }
   };
 
+  const handleSaveClick = async () => {
+    if (onSave) {
+      setIsSaving(true);
+      try {
+        await onSave();
+      } finally {
+        setIsSaving(false);
+      }
+    }
+  };
+
+  // Allow dragging signature fields
+  const handleDragStart = (e: React.DragEvent, fieldId: string) => {
+    e.dataTransfer.setData("fieldId", fieldId);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const fieldId = e.dataTransfer.getData("fieldId");
+    if (!fieldId) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+
+    setSignatureFields((prev) =>
+      prev.map((field) => (field.id === fieldId ? { ...field, x, y } : field)),
+    );
+  };
+
   return (
     <div className="w-full h-full bg-background flex flex-col">
       <div className="border-b p-4 flex justify-between items-center">
@@ -48,9 +83,14 @@ const DocumentEditor = ({
           <h2 className="text-xl font-medium ml-2">{documentName}</h2>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline" size="sm" onClick={onSave}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSaveClick}
+            disabled={isSaving}
+          >
             <Save className="h-4 w-4 mr-2" />
-            Save
+            {isSaving ? "Saving..." : "Save"}
           </Button>
           <Button variant="outline" size="sm" onClick={onAddSignatory}>
             <UserPlus className="h-4 w-4 mr-2" />
@@ -82,6 +122,8 @@ const DocumentEditor = ({
           <div
             className="relative w-full h-full border rounded-lg overflow-auto bg-white flex items-center justify-center"
             onClick={handleAddSignatureField}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
           >
             <img
               src={documentUrl}
@@ -98,6 +140,9 @@ const DocumentEditor = ({
                   top: `${field.y}%`,
                   transform: "translate(-50%, -50%)",
                 }}
+                draggable
+                onDragStart={(e) => handleDragStart(e, field.id)}
+                onClick={(e) => e.stopPropagation()} // Prevent adding new field when clicking on existing one
               >
                 <span className="text-xs font-medium">Signature</span>
               </div>
@@ -126,6 +171,21 @@ const DocumentEditor = ({
               alt="Document Preview"
               className="max-w-full max-h-full object-contain"
             />
+
+            {/* Show signature fields in preview mode too */}
+            {signatureFields.map((field) => (
+              <div
+                key={field.id}
+                className="absolute border-2 border-primary bg-primary/10 rounded p-2"
+                style={{
+                  left: `${field.x}%`,
+                  top: `${field.y}%`,
+                  transform: "translate(-50%, -50%)",
+                }}
+              >
+                <span className="text-xs font-medium">Signature</span>
+              </div>
+            ))}
           </div>
         </TabsContent>
       </Tabs>

@@ -1,8 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import DocumentEditor from "@/components/document/DocumentEditor";
 import ShareDialog from "@/components/document/ShareDialog";
+import { useAuth } from "@/context/AuthContext";
+import {
+  getDocument,
+  getDocumentFileUrl,
+  addSignatureFields,
+  addSignatories,
+} from "@/lib/documents";
 
 interface Recipient {
   id: string;
@@ -13,18 +20,63 @@ interface Recipient {
 const DocumentView = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [documentName, setDocumentName] = useState("");
+  const [documentUrl, setDocumentUrl] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [signatureFields, setSignatureFields] = useState<
+    { id: string; x: number; y: number }[]
+  >([]);
 
-  // In a real app, you would fetch the document data based on the ID
-  const documentName = id === "new" ? "New Document.pdf" : `Document ${id}.pdf`;
+  useEffect(() => {
+    const fetchDocument = async () => {
+      if (!id || !user) return;
+
+      try {
+        setIsLoading(true);
+        const document = await getDocument(id);
+        setDocumentName(document.title);
+
+        // Get document file URL from storage
+        const url = getDocumentFileUrl(document.file_path);
+        setDocumentUrl(url);
+
+        // In a real app, you would also fetch signature fields here
+        // For now, we'll use the local state
+      } catch (error) {
+        console.error("Error fetching document:", error);
+        navigate("/dashboard");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDocument();
+  }, [id, user, navigate]);
 
   const handleBack = () => {
-    navigate("/");
+    navigate("/dashboard");
   };
 
-  const handleSave = () => {
-    console.log("Document saved");
-    // In a real app, you would save the document state here
+  const handleSave = async () => {
+    if (!id || !user) return;
+
+    try {
+      // Save signature fields to database
+      await addSignatureFields(
+        id,
+        signatureFields.map((field) => ({
+          x: field.x,
+          y: field.y,
+          page: 1,
+        })),
+      );
+
+      console.log("Document saved");
+    } catch (error) {
+      console.error("Error saving document:", error);
+    }
   };
 
   const handleAddSignatory = () => {
@@ -35,11 +87,40 @@ const DocumentView = () => {
     setShareDialogOpen(true);
   };
 
-  const handleShareSend = (recipients: Recipient[]) => {
-    console.log("Sending document to:", recipients);
-    // In a real app, you would send the document to the recipients here
-    navigate("/");
+  const handleShareSend = async (
+    recipients: { email: string; name?: string }[],
+  ) => {
+    if (!id || !user) return;
+
+    try {
+      // Add signatories to database
+      await addSignatories(id, recipients);
+
+      console.log("Sending document to:", recipients);
+      navigate("/dashboard");
+    } catch (error) {
+      console.error("Error sending document:", error);
+    }
   };
+
+  const handleAddSignatureField = (newField: {
+    id: string;
+    x: number;
+    y: number;
+  }) => {
+    setSignatureFields((prev) => [...prev, newField]);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="h-screen bg-background flex flex-col">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen bg-background flex flex-col">
@@ -47,6 +128,10 @@ const DocumentView = () => {
       <main className="flex-1 flex flex-col overflow-hidden">
         <DocumentEditor
           documentName={documentName}
+          documentUrl={
+            documentUrl ||
+            "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&q=80"
+          }
           onBack={handleBack}
           onSave={handleSave}
           onAddSignatory={handleAddSignatory}
