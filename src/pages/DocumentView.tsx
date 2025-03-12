@@ -3,6 +3,12 @@ import { useParams, useNavigate } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import DocumentEditor from "@/components/document/DocumentEditor";
 import ShareDialog from "@/components/document/ShareDialog";
+import BulkSendDialog from "@/components/document/BulkSendDialog";
+import AuditTrail from "@/components/document/AuditTrail";
+import TemplateLibrary from "@/components/document/TemplateLibrary";
+import DocumentExpiration from "@/components/document/DocumentExpiration";
+import DocumentReminders from "@/components/document/DocumentReminders";
+import DocumentAccessControl from "@/components/document/DocumentAccessControl";
 import { useAuth } from "@/context/AuthContext";
 import {
   getDocument,
@@ -24,6 +30,12 @@ const DocumentView = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [bulkSendDialogOpen, setBulkSendDialogOpen] = useState(false);
+  const [auditTrailOpen, setAuditTrailOpen] = useState(false);
+  const [templateLibraryOpen, setTemplateLibraryOpen] = useState(false);
+  const [expirationDialogOpen, setExpirationDialogOpen] = useState(false);
+  const [remindersDialogOpen, setRemindersDialogOpen] = useState(false);
+  const [accessControlDialogOpen, setAccessControlDialogOpen] = useState(false);
   const [documentName, setDocumentName] = useState("");
   const [documentUrl, setDocumentUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -146,6 +158,44 @@ const DocumentView = () => {
     setShareDialogOpen(true);
   };
 
+  const handleBulkSend = () => {
+    // Check if there are signature fields before sending
+    if (fields.length === 0) {
+      toast({
+        title: "No signature fields",
+        description: "Please add at least one signature field before sending.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setBulkSendDialogOpen(true);
+  };
+
+  const handleViewAuditTrail = () => {
+    setAuditTrailOpen(true);
+  };
+
+  const handleOpenTemplateLibrary = () => {
+    setTemplateLibraryOpen(true);
+  };
+
+  const handleSaveAsTemplate = () => {
+    setTemplateLibraryOpen(true);
+  };
+
+  const handleSetExpiration = () => {
+    setExpirationDialogOpen(true);
+  };
+
+  const handleSendReminders = () => {
+    setRemindersDialogOpen(true);
+  };
+
+  const handleAccessControl = () => {
+    setAccessControlDialogOpen(true);
+  };
+
   const handleShareSend = async (
     recipients: { email: string; name?: string }[],
   ) => {
@@ -167,6 +217,14 @@ const DocumentView = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const handleSelectTemplate = (templateId: string) => {
+    // Logic to apply the selected template to the current document
+    toast({
+      title: "Template applied",
+      description: "The selected template has been applied to your document.",
+    });
   };
 
   if (isLoading) {
@@ -194,15 +252,65 @@ const DocumentView = () => {
           onSave={handleSave}
           onAddSignatory={handleAddSignatory}
           onSend={handleSend}
+          onBulkSend={handleBulkSend}
+          onViewAuditTrail={handleViewAuditTrail}
+          onOpenTemplateLibrary={handleOpenTemplateLibrary}
+          onSaveAsTemplate={handleSaveAsTemplate}
+          onSetExpiration={handleSetExpiration}
+          onSendReminders={handleSendReminders}
+          onAccessControl={handleAccessControl}
         />
       </main>
 
+      {/* Feature Dialogs */}
       <ShareDialog
         open={shareDialogOpen}
         onOpenChange={setShareDialogOpen}
         documentName={documentName}
         documentId={id}
         onSend={handleShareSend}
+      />
+
+      <BulkSendDialog
+        open={bulkSendDialogOpen}
+        onOpenChange={setBulkSendDialogOpen}
+        documentName={documentName}
+        documentId={id}
+        onSend={handleShareSend}
+      />
+
+      <AuditTrail
+        open={auditTrailOpen}
+        onOpenChange={setAuditTrailOpen}
+        documentId={id || ""}
+      />
+
+      <TemplateLibrary
+        open={templateLibraryOpen}
+        onOpenChange={setTemplateLibraryOpen}
+        onSelectTemplate={handleSelectTemplate}
+        currentDocumentId={id}
+      />
+
+      <DocumentExpiration
+        open={expirationDialogOpen}
+        onOpenChange={setExpirationDialogOpen}
+        documentId={id || ""}
+        documentName={documentName}
+      />
+
+      <DocumentReminders
+        open={remindersDialogOpen}
+        onOpenChange={setRemindersDialogOpen}
+        documentId={id || ""}
+        documentName={documentName}
+      />
+
+      <DocumentAccessControl
+        open={accessControlDialogOpen}
+        onOpenChange={setAccessControlDialogOpen}
+        documentId={id || ""}
+        documentName={documentName}
       />
     </div>
   );

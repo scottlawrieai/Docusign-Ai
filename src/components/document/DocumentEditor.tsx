@@ -20,6 +20,12 @@ import {
   User,
   FileSignature,
   Loader2,
+  Users,
+  ClipboardList,
+  FileIcon,
+  Clock,
+  Bell,
+  Lock,
 } from "lucide-react";
 import SignaturePad from "@/components/ui/signature-pad";
 import {
@@ -66,6 +72,13 @@ interface DocumentEditorProps {
   onSave?: () => void;
   onAddSignatory?: () => void;
   onSend?: () => void;
+  onBulkSend?: () => void;
+  onViewAuditTrail?: () => void;
+  onOpenTemplateLibrary?: () => void;
+  onSaveAsTemplate?: () => void;
+  onSetExpiration?: () => void;
+  onSendReminders?: () => void;
+  onAccessControl?: () => void;
 }
 
 const DocumentEditor = ({
@@ -75,6 +88,13 @@ const DocumentEditor = ({
   onSave,
   onAddSignatory,
   onSend,
+  onBulkSend,
+  onViewAuditTrail,
+  onOpenTemplateLibrary,
+  onSaveAsTemplate,
+  onSetExpiration,
+  onSendReminders,
+  onAccessControl,
 }: DocumentEditorProps) => {
   const [activeTab, setActiveTab] = useState("edit");
   const [fields, setFields] = useState<Field[]>([]);
@@ -408,6 +428,10 @@ const DocumentEditor = ({
             <UserPlus className="h-4 w-4 mr-2" />
             Add Signatory
           </Button>
+          <Button variant="outline" size="sm" onClick={onBulkSend}>
+            <Users className="h-4 w-4 mr-2" />
+            Bulk Send
+          </Button>
           <Button size="sm" onClick={onSend}>
             <Send className="h-4 w-4 mr-2" />
             Send for Signature
@@ -429,6 +453,21 @@ const DocumentEditor = ({
               </TabsTrigger>
               <TabsTrigger value="preview">Preview</TabsTrigger>
             </TabsList>
+
+            <div className="flex space-x-2 ml-4">
+              <Button variant="ghost" size="sm" onClick={onViewAuditTrail}>
+                <ClipboardList className="h-4 w-4 mr-1" />
+                Audit Trail
+              </Button>
+              <Button variant="ghost" size="sm" onClick={onOpenTemplateLibrary}>
+                <FileIcon className="h-4 w-4 mr-1" />
+                Templates
+              </Button>
+              <Button variant="ghost" size="sm" onClick={onSaveAsTemplate}>
+                <Plus className="h-4 w-4 mr-1" />
+                Save as Template
+              </Button>
+            </div>
 
             {activeTab === "edit" && (
               <DropdownMenu>
@@ -498,16 +537,30 @@ const DocumentEditor = ({
           </div>
 
           <div className="flex items-center space-x-2">
-            <Button variant="outline" size="sm" onClick={handleZoomOut}>
-              -
+            <Button variant="ghost" size="sm" onClick={onSetExpiration}>
+              <Clock className="h-4 w-4 mr-1" />
+              Expiration
             </Button>
-            <span className="text-sm">{Math.round(zoom * 100)}%</span>
-            <Button variant="outline" size="sm" onClick={handleZoomIn}>
-              +
+            <Button variant="ghost" size="sm" onClick={onSendReminders}>
+              <Bell className="h-4 w-4 mr-1" />
+              Reminders
             </Button>
-            <Button variant="ghost" size="sm" onClick={handleZoomReset}>
-              Reset
+            <Button variant="ghost" size="sm" onClick={onAccessControl}>
+              <Lock className="h-4 w-4 mr-1" />
+              Access
             </Button>
+            <div className="border-l pl-2 ml-2 flex items-center space-x-2">
+              <Button variant="outline" size="sm" onClick={handleZoomOut}>
+                -
+              </Button>
+              <span className="text-sm">{Math.round(zoom * 100)}%</span>
+              <Button variant="outline" size="sm" onClick={handleZoomIn}>
+                +
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleZoomReset}>
+                Reset
+              </Button>
+            </div>
           </div>
         </div>
 
