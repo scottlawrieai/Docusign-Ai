@@ -1,0 +1,62 @@
+### Test Supabase Authentication
+# @name signUp
+POST https://{{supabaseUrl}}/auth/v1/signup
+Content-Type: application/json
+apikey: {{supabaseAnonKey}}
+
+{
+  "email": "test@example.com",
+  "password": "password123"
+}
+
+### Test Login
+# @name signIn
+POST https://{{supabaseUrl}}/auth/v1/token?grant_type=password
+Content-Type: application/json
+apikey: {{supabaseAnonKey}}
+
+{
+  "email": "test@example.com",
+  "password": "password123"
+}
+
+### Get User
+# @name getUser
+GET https://{{supabaseUrl}}/auth/v1/user
+Content-Type: application/json
+apikey: {{supabaseAnonKey}}
+Authorization: Bearer {{signIn.response.body.access_token}}
+
+### Get Documents
+# @name getDocuments
+GET https://{{supabaseUrl}}/rest/v1/documents?select=*
+Content-Type: application/json
+apikey: {{supabaseAnonKey}}
+Authorization: Bearer {{signIn.response.body.access_token}}
+
+### Get Signatories
+# @name getSignatories
+GET https://{{supabaseUrl}}/rest/v1/signatories?select=*&document_id=eq.{{documentId}}
+Content-Type: application/json
+apikey: {{supabaseAnonKey}}
+Authorization: Bearer {{signIn.response.body.access_token}}
+
+### Get Signature Fields
+# @name getSignatureFields
+GET https://{{supabaseUrl}}/rest/v1/signature_fields?select=*&document_id=eq.{{documentId}}
+Content-Type: application/json
+apikey: {{supabaseAnonKey}}
+Authorization: Bearer {{signIn.response.body.access_token}}
+
+### Test Email Function
+# @name testEmail
+POST https://{{supabaseUrl}}/functions/v1/send-email
+Content-Type: application/json
+apikey: {{supabaseAnonKey}}
+Authorization: Bearer {{signIn.response.body.access_token}}
+
+{
+  "to": "test@example.com",
+  "subject": "Test Email",
+  "html": "<p>This is a test email</p>"
+}
