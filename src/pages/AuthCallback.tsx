@@ -19,17 +19,24 @@ const AuthCallback = () => {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        // Get the hash fragment from the URL
+        // Get the URL parameters
+        const params = new URLSearchParams(window.location.search);
         const hash = window.location.hash;
-        if (!hash) {
+
+        // Process the auth response
+        if (hash && hash.includes("access_token")) {
+          // Handle hash-based auth (email confirmation)
+          const { error } = await supabase.auth.getSession();
+          if (error) throw error;
+        } else if (params.get("error_description")) {
+          throw new Error(
+            params.get("error_description") || "Authentication error",
+          );
+        } else if (!hash && !params.get("code")) {
           setError("No authentication data found in URL");
           setLoading(false);
           return;
         }
-
-        // Process the hash with Supabase auth
-        const { error } = await supabase.auth.getSession();
-        if (error) throw error;
 
         // Redirect to dashboard after successful verification
         setTimeout(() => {

@@ -1,22 +1,26 @@
-import React, { useRef, useState, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
+import { Button } from "./button";
+import { Eraser, Undo2 } from "lucide-react";
 
 interface SignaturePadProps {
-  onChange?: (dataUrl: string) => void;
+  onChange: (dataUrl: string) => void;
   width?: number;
   height?: number;
-  className?: string;
+  defaultValue?: string;
 }
 
-const SignaturePad: React.FC<SignaturePadProps> = ({
+const SignaturePad = ({
   onChange,
   width = 400,
   height = 200,
-  className = "",
-}) => {
+  defaultValue = "",
+}: SignaturePadProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [ctx, setCtx] = useState<CanvasRenderingContext2D | null>(null);
+  const [history, setHistory] = useState<ImageData[]>([]);
 
+  // Initialize canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -24,46 +28,56 @@ const SignaturePad: React.FC<SignaturePadProps> = ({
     const context = canvas.getContext("2d");
     if (!context) return;
 
-    // Set up the canvas
+    // Set canvas properties
     context.lineWidth = 2;
     context.lineCap = "round";
-    context.strokeStyle = "black";
+    context.lineJoin = "round";
+    context.strokeStyle = "#000";
+
+    // Set canvas dimensions
+    canvas.width = width;
+    canvas.height = height;
+
+    // Fill with white background
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Save initial state
+    const initialState = context.getImageData(
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+    );
+    setHistory([initialState]);
+
     setCtx(context);
 
-    // Clear the canvas initially
-    context.fillStyle = "white";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-  }, []);
+    // Load default value if provided
+    if (defaultValue) {
+      const img = new Image();
+      img.onload = () => {
+        context.drawImage(img, 0, 0);
+        saveState();
+      };
+      img.src = defaultValue;
+    }
+  }, [width, height, defaultValue]);
 
   const startDrawing = (
     e:
       | React.MouseEvent<HTMLCanvasElement>
       | React.TouchEvent<HTMLCanvasElement>,
   ) => {
-    setIsDrawing(true);
     if (!ctx) return;
+    setIsDrawing(true);
 
-    let clientX, clientY;
+    // Get mouse/touch position
+    const { offsetX, offsetY } = getCoordinates(e);
 
-    if ("touches" in e) {
-      // Touch event
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      // Mouse event
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-
+    // Start path
     ctx.beginPath();
-    ctx.moveTo(x, y);
+    ctx.moveTo(offsetX, offsetY);
   };
 
   const draw = (
@@ -73,74 +87,106 @@ const SignaturePad: React.FC<SignaturePadProps> = ({
   ) => {
     if (!isDrawing || !ctx) return;
 
-    let clientX, clientY;
+    // Get mouse/touch position
+    const { offsetX, offsetY } = getCoordinates(e);
 
-    if ("touches" in e) {
-      // Touch event
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      // Mouse event
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-
-    ctx.lineTo(x, y);
+    // Draw line
+    ctx.lineTo(offsetX, offsetY);
     ctx.stroke();
   };
 
-  const endDrawing = () => {
+  const stopDrawing = () => {
+    if (!isDrawing || !ctx) return;
     setIsDrawing(false);
-    if (!ctx) return;
     ctx.closePath();
+    saveState();
+  };
 
-    // Notify parent component of the signature data
-    if (onChange && canvasRef.current) {
-      onChange(canvasRef.current.toDataURL());
+  const getCoordinates = (
+    e:
+      | React.MouseEvent<HTMLCanvasElement>
+      | React.TouchEvent<HTMLCanvasElement>,
+  ) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { offsetX: 0, offsetY: 0 };
+
+    if ("touches" in e) {
+      // Touch event
+      const rect = canvas.getBoundingClientRect();
+      const touch = e.touches[0];
+      return {
+        offsetX: touch.clientX - rect.left,
+        offsetY: touch.clientY - rect.top,
+      };
+    } else {
+      // Mouse event
+      return {
+        offsetX: e.nativeEvent.offsetX,
+        offsetY: e.nativeEvent.offsetY,
+      };
     }
   };
 
-  const clearSignature = () => {
+  const saveState = () => {
     if (!ctx || !canvasRef.current) return;
-    ctx.fillStyle = "white";
-    ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-    ctx.beginPath();
+    const canvas = canvasRef.current;
+    const currentState = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    setHistory((prev) => [...prev, currentState]);
 
-    // Notify parent component of the cleared signature
-    if (onChange) {
-      onChange("");
-    }
+    // Notify parent component of change
+    onChange(canvas.toDataURL());
+  };
+
+  const clearCanvas = () => {
+    if (!ctx || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    saveState();
+  };
+
+  const undo = () => {
+    if (!ctx || !canvasRef.current || history.length <= 1) return;
+    const canvas = canvasRef.current;
+    const newHistory = [...history];
+    newHistory.pop(); // Remove current state
+    const previousState = newHistory[newHistory.length - 1];
+    ctx.putImageData(previousState, 0, 0);
+    setHistory(newHistory);
+    onChange(canvas.toDataURL());
   };
 
   return (
-    <div className={`flex flex-col items-center ${className}`}>
-      <canvas
-        ref={canvasRef}
-        width={width}
-        height={height}
-        className="border border-input rounded-md touch-none"
-        onMouseDown={startDrawing}
-        onMouseMove={draw}
-        onMouseUp={endDrawing}
-        onMouseLeave={endDrawing}
-        onTouchStart={startDrawing}
-        onTouchMove={draw}
-        onTouchEnd={endDrawing}
-      />
-      <button
-        type="button"
-        onClick={clearSignature}
-        className="mt-2 text-sm text-muted-foreground hover:text-foreground"
-      >
-        Clear Signature
-      </button>
+    <div className="flex flex-col items-center">
+      <div className="border rounded-md overflow-hidden bg-white">
+        <canvas
+          ref={canvasRef}
+          onMouseDown={startDrawing}
+          onMouseMove={draw}
+          onMouseUp={stopDrawing}
+          onMouseLeave={stopDrawing}
+          onTouchStart={startDrawing}
+          onTouchMove={draw}
+          onTouchEnd={stopDrawing}
+          className="touch-none"
+        />
+      </div>
+      <div className="flex space-x-2 mt-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={undo}
+          disabled={history.length <= 1}
+        >
+          <Undo2 className="h-4 w-4 mr-1" />
+          Undo
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={clearCanvas}>
+          <Eraser className="h-4 w-4 mr-1" />
+          Clear
+        </Button>
+      </div>
     </div>
   );
 };

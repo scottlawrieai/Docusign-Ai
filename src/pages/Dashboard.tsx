@@ -79,8 +79,11 @@ const Dashboard = () => {
     if (!user) return;
 
     try {
+      console.log("Starting file upload process for:", file.name);
+
       // Upload file to Supabase storage
       const filePath = await uploadDocumentFile(file, user.id);
+      console.log("File uploaded successfully, path:", filePath);
 
       // Create document record in database
       const document = await createDocument({
@@ -88,11 +91,13 @@ const Dashboard = () => {
         user_id: user.id,
         file_path: filePath,
       });
+      console.log("Document record created:", document.id);
 
       // Navigate to document editor
       navigate(`/document/${document.id}`);
     } catch (error) {
       console.error("Error uploading document:", error);
+      alert("Failed to upload document. Please try again.");
     }
   };
 

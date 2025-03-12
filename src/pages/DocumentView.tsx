@@ -11,6 +11,7 @@ import {
   addSignatories,
   getDocumentSignatureFields,
 } from "@/lib/documents";
+import { toast } from "@/components/ui/use-toast";
 
 interface Recipient {
   id: string;
@@ -26,8 +27,8 @@ const DocumentView = () => {
   const [documentName, setDocumentName] = useState("");
   const [documentUrl, setDocumentUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [signatureFields, setSignatureFields] = useState<
-    { id: string; x: number; y: number }[]
+  const [fields, setFields] = useState<
+    { id: string; x: number; y: number; type: string; value?: string }[]
   >([]);
 
   useEffect(() => {
@@ -41,17 +42,41 @@ const DocumentView = () => {
 
         // Get document file URL from storage
         const url = getDocumentFileUrl(document.file_path);
+        console.log("Document URL from storage:", url);
+
+        // For PDF files, we might need to use a PDF viewer or convert to image
+        // For now, we'll use the URL directly and handle display in the component
         setDocumentUrl(url);
+
+        // For debugging - check if the URL is accessible via fetch
+        fetch(url, { method: "HEAD" })
+          .then((response) => {
+            if (response.ok) {
+              console.log("Document URL is accessible", response.status);
+            } else {
+              console.error("Document URL returned status:", response.status);
+            }
+          })
+          .catch((err) => console.error("Error checking document URL:", err));
+
+        // Preload the image to check if it's accessible
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => console.log("Document preload successful");
+        img.onerror = (e) => console.error("Document preload failed:", e);
+        img.src = url;
 
         // Fetch existing signature fields
         try {
           const fields = await getDocumentSignatureFields(id);
           if (fields && fields.length > 0) {
-            setSignatureFields(
+            setFields(
               fields.map((field) => ({
                 id: field.id,
                 x: field.x_position,
                 y: field.y_position,
+                type: field.field_type || "signature",
+                value: field.field_value || field.signature_data, // Support both new and old data format
               })),
             );
           }
@@ -80,16 +105,26 @@ const DocumentView = () => {
       // Save signature fields to database
       await addSignatureFields(
         id,
-        signatureFields.map((field) => ({
+        fields.map((field) => ({
           x: field.x,
           y: field.y,
           page: 1,
+          field_type: field.type,
+          field_value: field.value,
         })),
       );
 
-      console.log("Document saved");
+      toast({
+        title: "Document saved",
+        description: "Your signature fields have been saved successfully.",
+      });
     } catch (error) {
       console.error("Error saving document:", error);
+      toast({
+        title: "Error saving document",
+        description: "There was a problem saving your changes.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -98,6 +133,16 @@ const DocumentView = () => {
   };
 
   const handleSend = () => {
+    // Check if there are signature fields before sending
+    if (fields.length === 0) {
+      toast({
+        title: "No signature fields",
+        description: "Please add at least one signature field before sending.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setShareDialogOpen(true);
   };
 
@@ -109,17 +154,19 @@ const DocumentView = () => {
     try {
       // Add signatories to database
       await addSignatories(id, recipients);
+
+      toast({
+        title: "Document sent",
+        description: `Signature requests sent to ${recipients.length} recipient(s).`,
+      });
     } catch (error) {
       console.error("Error sending document:", error);
+      toast({
+        title: "Error sending document",
+        description: "There was a problem sending your document.",
+        variant: "destructive",
+      });
     }
-  };
-
-  const handleAddSignatureField = (newField: {
-    id: string;
-    x: number;
-    y: number;
-  }) => {
-    setSignatureFields((prev) => [...prev, newField]);
   };
 
   if (isLoading) {

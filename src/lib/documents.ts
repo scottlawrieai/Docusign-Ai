@@ -28,6 +28,9 @@ export interface SignatureField {
   x_position: number;
   y_position: number;
   page: number;
+  signature_data?: string;
+  field_type?: string;
+  field_value?: string;
 }
 
 export interface Signature {
@@ -45,12 +48,23 @@ export async function uploadDocumentFile(file: File, userId: string) {
   const fileName = `${uuidv4()}.${fileExt}`;
   const filePath = `${userId}/${fileName}`;
 
+  console.log(`Uploading file to ${filePath}`);
+
+  // For PDF files, we need to handle them as binary data
+  const options = file.type.includes("pdf")
+    ? { contentType: "application/pdf" }
+    : undefined;
+
   const { error } = await supabase.storage
     .from("documents")
-    .upload(filePath, file);
+    .upload(filePath, file, options);
 
-  if (error) throw error;
+  if (error) {
+    console.error("Error uploading file to storage:", error);
+    throw error;
+  }
 
+  console.log(`File uploaded successfully to ${filePath}`);
   return filePath;
 }
 
@@ -124,8 +138,35 @@ export async function getDocumentWithDetails(documentId: string) {
 
 // Get document file URL
 export function getDocumentFileUrl(filePath: string) {
-  const { data } = supabase.storage.from("documents").getPublicUrl(filePath);
-  return data.publicUrl;
+  if (!filePath) {
+    console.error("No file path provided for document URL");
+    return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&q=80";
+  }
+
+  try {
+    // Get a signed URL with longer expiration for better reliability
+    const { data: signedData } = supabase.storage
+      .from("documents")
+      .createSignedUrl(filePath, 60 * 60); // 1 hour expiration
+
+    if (signedData?.signedUrl) {
+      console.log("Generated signed URL for document", filePath);
+      return signedData.signedUrl;
+    }
+
+    // Fallback to public URL if signed URL fails
+    const { data } = supabase.storage.from("documents").getPublicUrl(filePath);
+    if (!data.publicUrl) {
+      console.error("Failed to get public URL for file path:", filePath);
+      return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&q=80";
+    }
+
+    console.log("Using public URL for document", filePath);
+    return data.publicUrl;
+  } catch (error) {
+    console.error("Error getting document URL:", error);
+    return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&q=80";
+  }
 }
 
 // Add signatories to a document
@@ -196,7 +237,14 @@ export async function getDocumentSignatories(documentId: string) {
 // Add signature fields to a document
 export async function addSignatureFields(
   documentId: string,
-  fields: { x: number; y: number; page?: number }[],
+  fields: {
+    x: number;
+    y: number;
+    page?: number;
+    signature_data?: string;
+    field_type?: string;
+    field_value?: string;
+  }[],
 ) {
   // First delete existing fields
   await supabase
@@ -210,6 +258,9 @@ export async function addSignatureFields(
     x_position: field.x,
     y_position: field.y,
     page: field.page || 1,
+    signature_data: field.signature_data || null,
+    field_type: field.field_type || "signature",
+    field_value: field.field_value || field.signature_data || null,
   }));
 
   if (fieldsToInsert.length === 0) {

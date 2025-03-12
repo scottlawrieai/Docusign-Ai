@@ -52,6 +52,25 @@ const UploadDialog = ({
 
   const handleUpload = () => {
     if (selectedFile && onUpload) {
+      // Check if file is a PDF or image
+      const fileType = selectedFile.type.toLowerCase();
+      const isValidType =
+        fileType.includes("pdf") ||
+        fileType.includes("image/") ||
+        fileType.includes("doc") ||
+        fileType.includes("docx");
+
+      if (!isValidType) {
+        alert("Please upload a PDF, image, or Word document.");
+        return;
+      }
+
+      console.log(
+        "Uploading file:",
+        selectedFile.name,
+        "Type:",
+        selectedFile.type,
+      );
       onUpload(selectedFile);
       onOpenChange && onOpenChange(false);
     }
